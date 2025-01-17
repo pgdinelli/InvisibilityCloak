@@ -5,7 +5,7 @@ import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_videoio.VideoCapture;
-
+import org.bytedeco.opencv.global.opencv_imgproc;
 
 public class Main {
     public static void main(String[] args) {
@@ -32,7 +32,13 @@ public class Main {
             capture.read(mat); // read method from VideoCapture class receives an object of Mat type as argument
 
             Frame frameToShow = converter.convert(mat); // converts object of type mat to type Frame
-            canvas.showImage(frameToShow); // shows image to user
+            Mat convertedMat = converter.convert(frameToShow); // converts object of type Frame to type Mat
+
+            // convert BGR format to HSV
+            opencv_imgproc.cvtColor(mat, convertedMat, opencv_imgproc.COLOR_BGR2HSV);
+            // show converted image
+            canvas.showImage(frameToShow);
+
 
             // adds delay inside the loop, otherwise the code runs too quick, and it won't be able to process the image correctly
             try {
