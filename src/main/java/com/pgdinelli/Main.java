@@ -4,8 +4,15 @@ import org.bytedeco.javacv.CanvasFrame;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.opencv_core.Mat;
+import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_videoio.VideoCapture;
 import org.bytedeco.opencv.global.opencv_imgproc;
+
+import java.awt.event.KeyEvent;
+
+import static org.opencv.core.CvType.CV_8UC3;
+import static org.bytedeco.opencv.global.opencv_core.*;
+
 
 public class Main {
     public static void main(String[] args) {
@@ -19,6 +26,7 @@ public class Main {
 
         // mat object used to get and store pixels of an image
         Mat mat = new Mat();
+
         // converter object that is used to convert mat object, so it can be read by CanvasFrame class
         OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 
@@ -26,6 +34,13 @@ public class Main {
         if (!capture.isOpened()){
             System.out.println("Error! Unable to access camera.");
         }
+
+        // background object used to capture the background of the image
+        Mat background = new Mat();
+        capture.read(background);
+
+
+
 
         // show frames while program is running
         while (true){
@@ -36,8 +51,32 @@ public class Main {
 
             // convert BGR format to HSV
             opencv_imgproc.cvtColor(mat, convertedMat, opencv_imgproc.COLOR_BGR2HSV);
+
+            // set HSV intervals for the chosen color
+            Mat lowerInferior = new Mat(1, 1, CV_8UC3, new Scalar(0, 100, 100, 0));
+            Mat lowerSuperior = new Mat(1, 1, CV_8UC3, new Scalar(10, 255, 255, 0));
+
+            Mat upperInferior = new Mat(1, 1, CV_8UC3, new Scalar(170, 100, 100, 0));
+            Mat upperSuperior = new Mat(1, 1, CV_8UC3, new Scalar(180, 255, 255, 0));
+
+            // Mat objects to get masks for color
+            Mat mask1 = new Mat();
+            Mat mask2 = new Mat();
+            Mat finalMask = new Mat();
+            Mat invertedMask = new Mat();
+            Mat original = new Mat();
+
+            // set masks for color
+            inRange(convertedMat, lowerInferior, upperInferior, mask1);
+            inRange(convertedMat, lowerSuperior, upperSuperior, mask2);
+
+            bitwise_or(mask1, mask2, finalMask);
+
+            finalMask = converter.convert(frameToShow);
+
             // show converted image
             canvas.showImage(frameToShow);
+
 
 
             // adds delay inside the loop, otherwise the code runs too quick, and it won't be able to process the image correctly
