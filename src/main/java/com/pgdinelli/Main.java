@@ -1,13 +1,14 @@
 package com.pgdinelli;
 
 import org.bytedeco.javacv.CanvasFrame;
-import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Scalar;
+import org.bytedeco.opencv.opencv_core.Size;
 import org.bytedeco.opencv.opencv_videoio.VideoCapture;
 import org.bytedeco.opencv.global.opencv_imgproc;
 
+import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 
 import static org.opencv.core.CvType.CV_8UC3;
@@ -27,9 +28,6 @@ public class Main {
         // mat object used to get and store pixels of an image
         Mat mat = new Mat();
 
-        // converter object that is used to convert mat object, so it can be read by CanvasFrame class
-        OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
-
         // check if camera was opened, if not then print error message
         if (!capture.isOpened()){
             System.out.println("Error! Unable to access camera.");
@@ -37,51 +35,73 @@ public class Main {
 
         // background object used to capture the background of the image
         Mat background = new Mat();
-        capture.read(background);
 
+        // converter object that is used to convert mat object, so it can be read by CanvasFrame class
+        OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 
-
+        // add event listener to capture background when key is pressed
+        canvas.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    mat.copyTo(background); // Capture background
+                    System.out.println("Background captured.");
+                }
+            }
+        });
 
         // show frames while program is running
         while (true){
-            capture.read(mat); // read method from VideoCapture class receives an object of Mat type as argument
+            capture.read(mat); // read method from VideoCapture class, receives an object of Mat type as argument
 
-            Frame frameToShow = converter.convert(mat); // converts object of type mat to type Frame
-            Mat convertedMat = converter.convert(frameToShow); // converts object of type Frame to type Mat
+            // checks if mat is being captured
+            if (mat.empty()) {
+                System.out.println("Failed to capture frame.");
+                break;
+            }
 
+            // check if background has been captured
+            if (background.empty()) {
+                canvas.showImage(converter.convert(mat));
+                continue;
+            }
+
+            // convertedMat used to convert the original mat from BGR to HSV format
+            Mat convertedMat = new Mat();
             // convert BGR format to HSV
             opencv_imgproc.cvtColor(mat, convertedMat, opencv_imgproc.COLOR_BGR2HSV);
 
-            // set HSV intervals for the chosen color
-            Mat lowerInferior = new Mat(1, 1, CV_8UC3, new Scalar(0, 100, 100, 0));
-            Mat lowerSuperior = new Mat(1, 1, CV_8UC3, new Scalar(10, 255, 255, 0));
-
-            Mat upperInferior = new Mat(1, 1, CV_8UC3, new Scalar(170, 100, 100, 0));
-            Mat upperSuperior = new Mat(1, 1, CV_8UC3, new Scalar(180, 255, 255, 0));
 
             // Mat objects to get masks for color
-            Mat mask1 = new Mat();
-            Mat mask2 = new Mat();
-            Mat finalMask = new Mat();
-            Mat invertedMask = new Mat();
-            Mat original = new Mat();
+            Mat finalMask = new Mat(mat.size(), CV_8UC1);
+            Mat invertedMask = new Mat(mat.size(), CV_8UC1);
+            Mat foreground = new Mat(mat.size(), mat.type());
+            Mat backgroundMasked = new Mat(mat.size(), mat.type());
+            Mat result = new Mat(mat.size(), mat.type());
 
-            // set masks for color
-            inRange(convertedMat, lowerInferior, upperInferior, mask1);
-            inRange(convertedMat, lowerSuperior, upperSuperior, mask2);
+            // set HSV intervals for the chosen color
+            Mat lowerInferior = new Mat(1, 1, CV_8UC3, new Scalar(35, 50, 50, 0));
+            Mat lowerSuperior = new Mat(1, 1, CV_8UC3, new Scalar(110, 255, 255, 0));
+            // filter HSV intervals and create a mask
+            inRange(convertedMat, lowerInferior, lowerSuperior, finalMask);
 
-            bitwise_or(mask1, mask2, finalMask);
+            // Smoothing the mask using GaussianBlur filter, smoothes strong borders
+            opencv_imgproc.GaussianBlur(finalMask, finalMask, new Size(1, 1), 0);
 
-            finalMask = converter.convert(frameToShow);
+            // invert masks
+            bitwise_not(finalMask, invertedMask);
 
-            // show converted image
-            canvas.showImage(frameToShow);
+            // combine the inverted mask with the original mask
+            bitwise_and(mat, mat, foreground, invertedMask);
+            bitwise_and(background, background, backgroundMasked, finalMask);
 
-
+            // merge and show the final image result
+            add(foreground, backgroundMasked, result);
+            canvas.showImage(converter.convert(result));
 
             // adds delay inside the loop, otherwise the code runs too quick, and it won't be able to process the image correctly
             try {
-                Thread.sleep(40);
+                Thread.sleep(30);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -95,6 +115,10 @@ public class Main {
             }
 
         }
+
+        // release resources
+        capture.release();
+        canvas.dispose();
 
     }
 
